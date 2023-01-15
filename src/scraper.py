@@ -4,7 +4,7 @@ from time import time
 from bs4 import BeautifulSoup, Tag
 
 
-STARTING_URL = "https://www.google.com/"
+STARTING_URL = "https://www.google.com/search?q=svg"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0"
 }
@@ -39,7 +39,6 @@ async def scrape_svgs(response: aiohttp.ClientResponse):
             print(
                 f"{time()}: Found SVG on {str(response.real_url.origin()) + response.real_url.path} ({svg_count} total)"
             )
-    print("Done!")
 
 
 async def fetch_and_clean_urls(response: aiohttp.ClientResponse):
@@ -49,11 +48,15 @@ async def fetch_and_clean_urls(response: aiohttp.ClientResponse):
     urls = []
 
     for anchor in anchors:
-        if anchor.name == "use" and anchor.attrs.get("xlink:href", "").startswith("/"):
+        if anchor.name.lower() == "use" and anchor.attrs.get(
+            "xlink:href", ""
+        ).startswith("/"):
             anchor.attrs["xlink:href"] = (
                 str(response.real_url.origin()) + anchor.attrs["xlink:href"]
             )
-        if anchor.attrs.get("href", "").startswith("/"):
+        if anchor.attrs.get("href", "").startswith("//"):
+            anchor.attrs["href"] = response.real_url.scheme + ":" + anchor.attrs["href"]
+        elif anchor.attrs.get("href", "").startswith("/"):
             anchor.attrs["href"] = (
                 str(response.real_url.origin()) + anchor.attrs["href"]
             )
@@ -101,6 +104,7 @@ async def main():
         session._prepare_headers(HEADERS)
         async with session.get(STARTING_URL) as response:
             await perform_crawl(session, response)
+            print("Done!")
             with open("all_svgs.html", "w") as f:
                 htmldoc = [f"<!-- {svg[0]} -->\n{svg[1]}" for svg in all_svgs]
                 f.write("\n\n".join(htmldoc))
