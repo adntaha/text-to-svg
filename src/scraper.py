@@ -14,12 +14,14 @@ all_svgs: list[list[str]] = []
 svg_count = 0
 
 
-def clear_useless_classes(svg: Tag):
+def clear_useless_classes(origin: str, svg: Tag):
     svg.attrs.pop("class", None)
     svg.attrs.pop("focusable", None)
+    if svg.name.lower() == "use" and svg.attrs.get("xlink:href", "").startswith("/"):
+        svg.attrs["xlink:href"] = origin + svg.attrs["xlink:href"]
     for child in svg.children:
         if isinstance(child, Tag):
-            clear_useless_classes(child)
+            clear_useless_classes(origin, child)
 
 
 async def scrape_svgs(response: aiohttp.ClientResponse):
@@ -29,7 +31,7 @@ async def scrape_svgs(response: aiohttp.ClientResponse):
     svgs = soup.find_all("svg")
 
     for svg in svgs:
-        clear_useless_classes(svg)
+        clear_useless_classes(str(response.real_url.origin()), svg)
 
         if str(svg).replace("\n", "") not in map(
             lambda x: x[1].replace("\n", ""), all_svgs
@@ -48,12 +50,6 @@ async def fetch_and_clean_urls(response: aiohttp.ClientResponse):
     urls = []
 
     for anchor in anchors:
-        if anchor.name.lower() == "use" and anchor.attrs.get(
-            "xlink:href", ""
-        ).startswith("/"):
-            anchor.attrs["xlink:href"] = (
-                str(response.real_url.origin()) + anchor.attrs["xlink:href"]
-            )
         if anchor.attrs.get("href", "").startswith("//"):
             anchor.attrs["href"] = response.real_url.scheme + ":" + anchor.attrs["href"]
         elif anchor.attrs.get("href", "").startswith("/"):
